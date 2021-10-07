@@ -1,0 +1,36 @@
+#pragma kernel NoiseFieldGenerator
+
+//#include "Packages/jp.keijiro.noiseshader/Shader/SimplexNoise3D.hlsl"
+
+uint3 Dims;
+float Scale;
+float Time;
+RWStructuredBuffer<float> Voxels;
+float box(float3 p, float3 b) { float3 q = abs(p) - b;
+return length(max(q, float3( 0., 0., 0.))) + min(0., max(q.x, max(q.y, q.z)));
+}
+float3 mod(float3 x, float3 y)
+{
+	return x - y * floor(x / y);
+}
+float no(float3 p) { float3 f = floor(p); p = smoothstep(0., 1., frac(p));
+float3 se = float3(45., 98., 784.); float4 v1 = dot(f, se) + float4(0., se.y, se.z,se.z+se.y);
+float4 v2 = lerp(frac(sin(v1)*7845.236), frac(sin(v1 + se.x)*7845.236), p.x);
+float2 v3 = lerp(v2.xz, v2.yw, p.y);
+return lerp(v3.x, v3.y, p.z);
+}
+[numthreads(8, 8, 8)]
+void NoiseFieldGenerator(uint3 id : SV_DispatchThreadID)
+{
+    float3 p = Scale * (id + 0.5 - Dims / 2);
+    float value = -p.y;
+	/*float3 r2 = float3(1., 1., 1.);
+	float3 p2 = mod(p + float3(0., 0., frac(Time*0.1)*10.)+0.5*r2, r2) - 0.5*r2;
+	value += step(box(p2, float3(0.2, 0.2,0.2)),0.);*/
+	//value += no(p*2.+Time);
+	float bb = box(p - float3(0., 1., 0.), float3(0.5, 1., 0.5));
+	float d1 = max(no(p*2. + Time)*0.5, step(bb, 0.));
+	d1 += sin(bb*30.-Time*10.)*0.01*smoothstep(1.,0.,bb)*step(0.,bb);
+	value += d1;
+    Voxels[id.x + Dims.x * (id.y + Dims.y * id.z)] = value;
+}
